@@ -1,0 +1,82 @@
+# typos 拼写检查配置文件
+# 文档: https://github.com/crate-ci/typos
+
+[default.extend-words]
+importas = "importas"
+
+# 自定义词典 - 添加项目中使用的特殊词汇
+
+# Go 相关
+gonic = "gonic"
+struct = "struct"
+func = "func"
+chan = "chan"
+iota = "iota"
+rune = "rune"
+
+# 技术术语
+oms = "oms"
+api = "api"
+gitlab = "gitlab"
+githooks = "githooks"
+chglog = "chglog"
+golangci = "golangci"
+bestfulfill = "bestfulfill"
+devops = "devops"
+
+# 常见缩写
+impl = "impl"
+cmds = "cmds"
+conf = "conf"
+docs = "docs"
+libs = "libs"
+utils = "utils"
+repo = "repo"
+auth = "auth"
+ctx = "ctx"
+req = "req"
+resp = "resp"
+db = "db"
+sql = "sql"
+http = "http"
+https = "https"
+json = "json"
+yaml = "yaml"
+toml = "toml"
+
+[files]
+# 扩展忽略的文件类型
+extend-exclude = [
+    "*.sum",
+    "*.lock",
+    "*.log",
+    "*.bin",
+    "*.exe",
+    "*.so",
+    "*.dylib",
+    "*.dll",
+    "*.pb.go",
+    "*.pb.gw.go",
+    "*.swagger.json",
+    "go.work.sum",
+    "go.sum",
+    "vendor/",
+    "node_modules/",
+    ".git/",
+    ".idea/",
+    ".vscode/",
+    "*.min.js",
+    "*.min.css",
+]
+
+[type.go]
+# Go 文件特定配置
+extend-glob = ["*.go"]
+
+[type.markdown]
+# Markdown 文件特定配置
+extend-glob = ["*.md"]
+
+[type.yaml]
+# YAML 文件特定配置
+extend-glob = ["*.yml", "*.yaml"]

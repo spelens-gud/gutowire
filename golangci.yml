@@ -1,0 +1,100 @@
+version: "2"
+run:
+    timeout: 5m
+    # 并发数，根据 CPU 核心数自动调整
+    # concurrency: 8
+linters:
+    enable:
+        # ============ 错误检查类 ============
+        - errcheck          # 检查未处理的错误 [关键]
+        - govet             # Go 官方静态分析工具 [关键]
+        - staticcheck       # 强大的静态分析工具，包含 gosimple [关键]
+        - unused            # 检查未使用的常量、变量、函数和类型 [关键]
+        - ineffassign       # 检查无效的赋值 [快速]
+        
+        # ============ 代码质量类 ============
+        - gocritic          # 提供诊断检查，发现 bug、性能和风格问题 [推荐]
+        - gosec             # 检查安全问题 [推荐]
+        - errname           # 检查错误命名规范 (Err前缀/Error后缀)
+        - errorlint         # 检查 Go 1.13+ 错误包装的问题
+        - nilerr            # 检查返回 nil 错误但返回非 nil 值的代码
+        - nilnil            # 检查同时返回 nil 错误和 nil 值
+        
+        # ============ 代码风格类 ============
+        - revive            # golint 的替代品，可配置的代码风格检查 [推荐]
+        - misspell          # 检查英文拼写错误 [快速]
+        - godot             # 检查注释是否以句号结尾 [快速]
+        - nolintlint        # 检查 nolint 指令是否有效 [快速]
+        - whitespace        # 检查不必要的空行 [快速]
+        
+        # ============ 性能优化类 ============
+        - prealloc          # 检查可以预分配的 slice [快速]
+        - unconvert         # 检查不必要的类型转换
+        - perfsprint        # 检查可以用更快方式替代 fmt.Sprintf
+        - mirror            # 检查 bytes/strings 的错误使用模式
+        
+        # ============ 复杂度控制类 ============
+        - funlen            # 检查函数长度 [快速]
+        - cyclop            # 检查圈复杂度 [快速]
+        - gocognit          # 检查认知复杂度 [快速]
+        - nestif            # 检查深度嵌套的 if 语句 [快速]
+        - gocyclo           # 检查循环复杂度 [快速]
+        
+        # ============ 代码规范类 ============
+        - lll               # 检查代码行长度 [快速]
+        - nakedret          # 检查裸返回语句 [快速]
+        - dogsled           # 检查过多的空白标识符赋值 [快速]
+        - dupword           # 检查重复的单词 [快速]
+        - copyloopvar       # 检测循环变量复制的位置 [快速]
+        
+        # ============ 最佳实践类 ============
+        - bodyclose         # 检查 HTTP response body 是否正确关闭
+        - contextcheck      # 检查函数是否使用了非继承的 context
+        - durationcheck     # 检查两个 duration 相乘的错误
+        - makezero          # 检查 slice 声明时的非零初始长度
+        - noctx             # 检查缺少 context.Context 的函数
+        - rowserrcheck      # 检查 sql.Rows.Err 是否被检查
+        - sqlclosecheck     # 检查 sql 资源是否正确关闭
+        - wastedassign      # 检查浪费的赋值语句
+        
+        # ============ 导入和依赖类 ============
+        - importas          # 强制一致的导入别名 [自动修复]
+        
+        # ============ 注释和文档类 ============
+        - godoclint         # 检查 Go 文档实践 [快速]
+        - godox             # 检测 FIXME、TODO 等关键字 [快速]
+        
+        # ============ 测试相关类 ============
+        - testableexamples  # 检查示例是否可测试 [快速]
+        - thelper           # 检测测试辅助函数是否调用 t.Helper()
+        
+        # ============ 特定场景类 ============
+        - asciicheck        # 检查标识符中的非 ASCII 字符 [快速]
+        - bidichk           # 检查危险的 Unicode 字符序列 [快速]
+        - gomoddirectives   # 管理 go.mod 中的指令 [快速]
+        - usestdlibvars     # 检测可以使用标准库变量/常量的地方 [快速]
+        - exptostd          # 检测可以用标准库替代 x/exp 的函数 [自动修复]
+
+    # disable 部分可以留空，默认未启用的 linters 不会运行
+    # 以下是一些过于严格或主观的 linters，不建议启用：
+    # - exhaustruct       # 要求所有结构体字段初始化
+    # - varnamelen        # 变量名长度检查
+    # - gochecknoglobals  # 禁止全局变量
+    # - gochecknoinits    # 禁止 init 函数
+    # - nonamedreturns    # 禁止命名返回值
+    # - wrapcheck         # 要求包装外部错误
+    # - ireturn           # 接口返回检查
+    # - tagliatelle       # struct tag 命名检查
+    # - testpackage       # 要求使用独立测试包
+    # - paralleltest      # 要求使用 t.Parallel()
+    # - nlreturn          # 要求 return 前有空行
+    # - wsl_v5            # 空行规则
+
+# ============ Linter 配置 ============
+# 注意：golangci-lint v2 不支持 linters-settings，配置需要直接放在顶层
+
+issues:
+    # 每个 linter 最多报告的问题数
+    max-issues-per-linter: 50
+    # 相同问题最多报告次数
+    max-same-issues: 3

@@ -1,0 +1,61 @@
+fail_fast: false
+repos:
+    - repo: https://github.com/pre-commit/pre-commit-hooks
+      rev: v4.3.0
+      hooks:
+          - id: check-byte-order-marker
+          - id: check-case-conflict
+          - id: check-merge-conflict
+          - id: check-symlinks
+          - id: check-yaml
+          - id: end-of-file-fixer
+          - id: mixed-line-ending
+          - id: trailing-whitespace
+    - repo: https://github.com/psf/black
+      rev: 22.10.0
+      hooks:
+          - id: black
+    - repo: local
+      hooks:
+          - id: goimports
+            name: goimports
+            description: Format files with goimports.
+            entry: bash -c 'goimports -l -d .'
+            language: system
+            files: \.go$
+            pass_filenames: false
+          - id: go-vet
+            name: go vet
+            description: Check go dependencies
+            entry: bash -c 'go vet ./...'
+            language: system
+            files: \.go$
+            pass_filenames: false
+          - id: golangci-lint
+            name: golangci-lint
+            description: check all golandci-lint
+            entry: bash -c 'golangci-lint run ./...'
+            language: system
+            files: \.go$
+            pass_filenames: false
+          - id: govulncheck
+            name: govulncheck
+            description: Check the package for errors.
+            entry: bash -c 'govulncheck ./...'
+            language: system
+            files: \.go$
+            pass_filenames: false
+          - id: go-test
+            name: go test
+            description: nit test for the project
+            entry: bash -c 'CGO_ENABLED=1 go test -race -cover ./...'
+            language: system
+            files: \.go$
+            pass_filenames: false
+          - id: typos
+            name: typos
+            description: check typos
+            entry: bash -c 'typos'
+            language: system
+            files: \.*$
+            pass_filenames: false
