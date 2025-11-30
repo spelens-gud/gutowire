@@ -11,6 +11,9 @@ var (
 	filePrefix = "autowire"
 )
 
+// setTemp 预编译的 Set 模板，用于快速生成代码.
+var setTemp = template.Must(template.New("").Parse(setTemplate))
+
 // element 表示一个可注入的组件(结构体或函数).
 type element struct {
 	name        string   // 组件名称，如 Zoo、Cat
@@ -19,20 +22,16 @@ type element struct {
 	implements  []string // 实现的接口列表
 	pkg         string   // 所在包名
 	pkgPath     string   // 完整的包导入路径
-	typ         uint     // 类型标识（保留字段）
 	initWire    bool     // 是否标记为 @autowire.init
 	configWire  bool     // 是否标记为 @autowire.config
 }
 
-// wireSet 表示一个 Wire Set 的配置信息.
+// wireSet struct    表示一个 Wire Set 的配置信息.
 type wireSet struct {
 	Package string   // 包名
 	Items   []string // Set 中包含的所有项（构造函数、结构体等）
 	SetName string   // Set 的名称，如 AnimalsSet
 }
-
-// setTemp 预编译的 Set 模板，用于快速生成代码.
-var setTemp = template.Must(template.New("").Parse(setTemplate))
 
 // WithPkg function    设置生成文件的包名
 // 如果不设置，会自动从目录名推断.

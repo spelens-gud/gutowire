@@ -19,7 +19,7 @@ import (
 
 const (
 	// thisIsYourTemplate 生成的辅助函数模板
-	// 用于包装 Initialize 函数，使其更易用
+	// 用于包装 Initialize 函数，使其更易用.
 	thisIsYourTemplate = `
 func thisIsYour%s(res *%s,%s) (err error, cleanup func()) {
 	*res, cleanup, err = %s
@@ -34,7 +34,6 @@ var regexpCall = regexp.MustCompile(`gutowire\.IWantA\(&([a-zA-Z]+).*?\)`)
 // iwantA IWantA 功能的内部状态.
 type iwantA struct {
 	wantInputIdent     string   // 输入参数的标识符
-	wantName           string   // 想要的类型名称
 	thisIsYourFuncName string   // 生成的函数名称
 	callFileLines      []string // 调用文件的所有行
 	callLine           int      // 调用所在的行号

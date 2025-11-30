@@ -1,11 +1,13 @@
 package internal
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 )
 
 // init function    初始化日志配置.
@@ -91,8 +93,18 @@ func runWire(path string) error {
 		return fmt.Errorf("未找到 wire 命令: %w\n请通过以下命令安装: go install github.com/google/wire/cmd/wire@latest", err)
 	}
 
+	// 检查是否为可信的 bin 目录
+	if !strings.Contains(wirePath, "bin") {
+		return fmt.Errorf("wire 命令路径不安全: %s", wirePath)
+	}
+
+	// 创建带超时的上下文
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	// 在指定目录下执行 wire 命令
-	cmd := exec.Command(wirePath)
+	//nolint:gosec
+	cmd := exec.CommandContext(ctx, wirePath)
 	cmd.Dir = path
 	output, err := cmd.CombinedOutput()
 	if err != nil {

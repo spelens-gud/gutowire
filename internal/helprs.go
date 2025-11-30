@@ -58,6 +58,7 @@ func getPathGoPkgName(pathStr string) (pkg string, err error) {
 		}
 
 		// 解析 Go 文件获取包名
+		//nolint:gosec
 		bs, err := os.ReadFile(filepath.Join(pathStr, name))
 		if err != nil {
 			return "", fmt.Errorf("读取文件 %s 失败: %w", name, err)
