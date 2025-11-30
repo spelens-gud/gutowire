@@ -4,6 +4,7 @@
 package generator
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"go/ast"
@@ -55,7 +56,10 @@ func NewAutoWireSearcher(genPath string, modBase string, initWire []string, pkg 
 // SearchAllPath method    递归扫描指定目录下的所有 Go 文件
 // 跳过 vendor 和 testdata 目录，跳过测试文件.
 func (sc *AutoWireSearcher) SearchAllPath(file string) (err error) {
-	return filepath.Walk(file, func(path string, f os.FileInfo, _ error) error {
+	var files []string
+
+	// 第一步：收集所有需要处理的文件
+	err = filepath.Walk(file, func(path string, f os.FileInfo, _ error) error {
 		fn := f.Name()
 
 		// 跳过 vendor 和 testdata 目录
@@ -68,28 +72,68 @@ func (sc *AutoWireSearcher) SearchAllPath(file string) (err error) {
 			return nil
 		}
 
-		// 并发处理每个文件
+		files = append(files, path)
+		return nil
+	})
+
+	if err != nil {
+		return err
+	}
+
+	// 第二步：并发处理所有文件
+	for _, path := range files {
+		path := path // 捕获循环变量
 		sc.wg.Go(func() error {
 			return sc.searchWire(path)
 		})
+	}
 
-		// 等待当前文件处理完成再继续
-		return sc.wg.Wait()
-	})
+	// 等待所有文件处理完成
+	return sc.wg.Wait()
 }
 
 // searchWire method    扫描单个 Go 文件，查找并解析 @autowire 注解.
+// quickCheckForTag method    快速检查文件是否包含 @autowire 标记
+// 只扫描文件前100行，避免读取整个大文件.
+func (sc *AutoWireSearcher) quickCheckForTag(file string) (bool, error) {
+	//nolint:gosec
+	f, err := os.Open(file)
+	if err != nil {
+		return false, err
+	}
+	defer func() {
+		_ = f.Close()
+	}()
+
+	scanner := bufio.NewScanner(f)
+	lineCount := 0
+	tagBytes := []byte(config.WireTag)
+
+	for scanner.Scan() && lineCount < 100 {
+		if bytes.Contains(scanner.Bytes(), tagBytes) {
+			return true, nil
+		}
+		lineCount++
+	}
+
+	return false, scanner.Err()
+}
+
 func (sc *AutoWireSearcher) searchWire(file string) error {
+	// 快速检查：扫描文件前100行，如果没有 @autowire 标记则跳过
+	hasTag, err := sc.quickCheckForTag(file)
+	if err != nil {
+		return fmt.Errorf("快速检查文件 %s 失败: %w", file, err)
+	}
+	if !hasTag {
+		return nil
+	}
+
 	// 读取文件内容
 	//nolint:gosec
 	data, err := os.ReadFile(file)
 	if err != nil {
 		return fmt.Errorf("读取文件 %s 失败: %w", file, err)
-	}
-
-	// 快速检查：如果文件中没有 @autowire 标记，直接跳过
-	if !bytes.Contains(data, []byte(config.WireTag)) {
-		return nil
 	}
 
 	// 解析 Go 源文件的 AST
@@ -109,8 +153,11 @@ func (sc *AutoWireSearcher) searchWire(file string) error {
 	// 获取接口实现关系
 	implementMap := getImplement(parseFile)
 
+	// 计算包路径（只计算一次）
+	pkgPath := sc.getPkgPath(file)
+
 	// 解析每个声明的注解
-	sc.parseAnnotations(matchDecls, file, parseFile, implementMap)
+	sc.parseAnnotations(matchDecls, file, pkgPath, parseFile, implementMap)
 
 	return nil
 }
@@ -196,12 +243,12 @@ func (sc *AutoWireSearcher) collectTypeDecls(d *ast.GenDecl) []tmpDecl {
 }
 
 // parseAnnotations method    解析声明的注解.
-func (sc *AutoWireSearcher) parseAnnotations(matchDecls []tmpDecl, file string,
+func (sc *AutoWireSearcher) parseAnnotations(matchDecls []tmpDecl, file string, pkgPath string,
 	parseFile *ast.File, implementMap map[string]string) {
 	for _, decl := range matchDecls {
 		lines := strings.Split(decl.docs, "\n")
 		for _, c := range lines {
-			sc.analysisWireTag(strings.TrimSpace(c), file, &decl,
+			sc.analysisWireTag(strings.TrimSpace(c), file, pkgPath, &decl,
 				parseFile, implementMap)
 		}
 	}
@@ -220,7 +267,7 @@ func (sc *AutoWireSearcher) getPkgPath(filePath string) (pkgPath string) {
 // - @autowire.config(set=config) - 配置注入
 // - @autowire(set=animals,FlyAnimal) - 接口绑定
 // - @autowire(set=animals,new=CustomConstructor) - 自定义构造函数.
-func (sc *AutoWireSearcher) analysisWireTag(tag, filePath string, decl *tmpDecl, f *ast.File,
+func (sc *AutoWireSearcher) analysisWireTag(tag, filePath string, pkgPath string, decl *tmpDecl, f *ast.File,
 	implementMap map[string]string) {
 	// 检查是否为 @autowire 注解
 	if !strings.HasPrefix(tag, config.WireTag) {
@@ -238,7 +285,7 @@ func (sc *AutoWireSearcher) analysisWireTag(tag, filePath string, decl *tmpDecl,
 	options := sc.parseTagOptions(tagStr)
 
 	// 创建组件元素
-	wireElement := sc.createWireElement(decl, f, filePath)
+	wireElement := sc.createWireElement(decl, f, pkgPath)
 
 	// 确定构造函数
 	sc.determineConstructor(&wireElement, decl, f)
@@ -256,7 +303,7 @@ func (sc *AutoWireSearcher) analysisWireTag(tag, filePath string, decl *tmpDecl,
 	sc.addInterfaceImplementations(&wireElement, implementMap, decl.name)
 
 	// 延迟执行：将组件添加到 elementMap
-	sc.addElementToMap(setName, filePath, wireElement, decl.name)
+	sc.addElementToMap(setName, pkgPath, wireElement, decl.name)
 }
 
 // parseTagSuffix method    解析 .init 或 .config 后缀.
@@ -277,7 +324,7 @@ func (sc *AutoWireSearcher) parseTagSuffix(tag string) (itemFunc, tagStr string)
 
 // parseTagOptions method    解析注解参数.
 func (sc *AutoWireSearcher) parseTagOptions(tagStr string) map[string]string {
-	options := make(map[string]string)
+	options := make(map[string]string, 4) // 预分配容量，通常注解参数不超过4个
 	content := strings.TrimPrefix(strings.TrimSuffix(tagStr, ")"), "(")
 
 	for _, s := range strings.Split(content, ",") {
@@ -295,11 +342,11 @@ func (sc *AutoWireSearcher) parseTagOptions(tagStr string) map[string]string {
 }
 
 // createWireElement method    创建组件元素.
-func (sc *AutoWireSearcher) createWireElement(decl *tmpDecl, f *ast.File, filePath string) Element {
+func (sc *AutoWireSearcher) createWireElement(decl *tmpDecl, f *ast.File, pkgPath string) Element {
 	return Element{
 		Name:    decl.name,
 		Pkg:     f.Name.Name,
-		PkgPath: sc.getPkgPath(filePath),
+		PkgPath: pkgPath,
 	}
 }
 
@@ -412,7 +459,12 @@ func (sc *AutoWireSearcher) extractFieldName(f *ast.Field) string {
 
 // isExportedField method    检查字段是否为导出字段（首字母大写.
 func (sc *AutoWireSearcher) isExportedField(fieldName string) bool {
-	return len(fieldName) > 0 && fieldName[0] >= 'A' && fieldName[0] <= 'Z'
+	if len(fieldName) == 0 {
+		return false
+	}
+	// 使用简单的 ASCII 判断，Go 标识符首字母必须是 ASCII 大写字母才算导出
+	r := rune(fieldName[0])
+	return r >= 'A' && r <= 'Z'
 }
 
 // addInterfaceImplementations 添加接口实现关系.
@@ -424,9 +476,7 @@ func (sc *AutoWireSearcher) addInterfaceImplementations(wireElement *Element,
 }
 
 // addElementToMap method    将组件添加到 elementMap.
-func (sc *AutoWireSearcher) addElementToMap(setName, filePath string, wireElement Element, name string) {
-	pkgPath := sc.getPkgPath(filePath)
-
+func (sc *AutoWireSearcher) addElementToMap(setName, pkgPath string, wireElement Element, name string) {
 	log.Printf("收集到 wire 对象 [ %sSet ] : %s\n", strcase.LowerCamelCase(setName), wireElement.Pkg+"."+wireElement.Name)
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
@@ -484,13 +534,18 @@ func (sc *AutoWireSearcher) clean() error {
 	}
 
 	// 删除 wire_gen.go（由 wire 命令生成的文件）
-	_ = os.Remove(filepath.Join(sc.genPath, "wire_gen.go"))
+	if err := os.Remove(filepath.Join(sc.genPath, "wire_gen.go")); err != nil && !os.IsNotExist(err) {
+		log.Printf("[warn] 删除 wire_gen.go 失败: %v", err)
+	}
 
 	// 删除所有 autowire_*.go 文件
 	for _, entry := range entries {
 		name := entry.Name()
 		if strings.HasPrefix(name, config.FilePrefix+"_") && strings.HasSuffix(name, ".go") {
-			_ = os.Remove(filepath.Join(sc.genPath, name))
+			filePath := filepath.Join(sc.genPath, name)
+			if err := os.Remove(filePath); err != nil && !os.IsNotExist(err) {
+				log.Printf("[warn] 删除文件 %s 失败: %v", name, err)
+			}
 		}
 	}
 	return nil

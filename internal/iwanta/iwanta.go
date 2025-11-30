@@ -128,7 +128,7 @@ func IWantA(in interface{}, searchDepDirs ...string) (_ struct{}) {
 		wantTypeVar = rType.String()
 	}
 
-	wantTypeName := strcase.SnakeCase(strings.Replace(strings.Replace(wantTypeVar, "_", "", -1), ".", "_", -1))
+	wantTypeName := strcase.SnakeCase(strings.ReplaceAll(strings.ReplaceAll(wantTypeVar, "_", ""), ".", "_"))
 	genPath := filepath.Dir(callFile)
 	wireOpt := make([]config.Option, 0)
 

@@ -21,6 +21,7 @@ import (
 	"github.com/spelens-gud/gutowire/internal/config"
 	"github.com/spelens-gud/gutowire/internal/runner"
 	"github.com/spelens-gud/gutowire/internal/version"
+	"github.com/spelens-gud/gutowire/internal/watcher"
 	"github.com/spf13/cobra"
 )
 
@@ -29,9 +30,13 @@ const (
 )
 
 var (
-	wirePath string
-	scope    string
-	pkg      string
+	wirePath   string
+	scope      string
+	pkg        string
+	configFile string
+	watch      bool
+	noCache    bool
+	initConfig bool
 )
 
 // rootCmd represents the base command when called without any subcommands.
@@ -48,22 +53,42 @@ to quickly create a Cobra application.`,
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// 构建配置选项
+		// 如果是初始化配置文件
+		if initConfig {
+			return handleInitConfig()
+		}
+
+		// 加载配置文件
+		cfg, err := config.LoadConfigFile(configFile)
+		if err != nil {
+			return fmt.Errorf("加载配置文件失败: %w", err)
+		}
+
+		// 构建配置选项（命令行参数优先级高于配置文件）
 		var opts []config.Option
 
 		// 应用包名配置
 		if pkg != "" {
 			opts = append(opts, config.WithPkg(pkg))
+		} else if cfg.Package != "" {
+			opts = append(opts, config.WithPkg(cfg.Package))
 		}
 
 		// 应用搜索路径配置
-		if scope != "" {
-			opts = append(opts, config.WithSearchPath(scope))
+		searchPath := scope
+		if searchPath == "" && cfg.SearchPath != "" {
+			searchPath = cfg.SearchPath
+		}
+		if searchPath != "" {
+			opts = append(opts, config.WithSearchPath(searchPath))
 		}
 
-		// 从位置参数或标志获取生成路径
+		// 从位置参数或标志或配置文件获取生成路径
 		if wirePath == "" && len(args) > 0 {
 			wirePath = args[0]
+		}
+		if wirePath == "" && cfg.OutputPath != "" {
+			wirePath = cfg.OutputPath
 		}
 
 		// 验证必需参数
@@ -71,8 +96,17 @@ to quickly create a Cobra application.`,
 			return fmt.Errorf("必须指定 Wire 配置文件生成路径\n使用方式: %s [flags] <生成路径>", commandName)
 		}
 
-		// 添加默认的初始化配置
-		opts = append(opts, config.InitStruct())
+		// 添加初始化配置
+		if len(cfg.InitTypes) > 0 {
+			opts = append(opts, config.InitStruct(cfg.InitTypes...))
+		} else {
+			opts = append(opts, config.InitStruct())
+		}
+
+		// Watch 模式
+		if watch || cfg.Watch {
+			return handleWatch(wirePath, searchPath, opts)
+		}
 
 		// 执行自动装配
 		if err := runner.RunAutoWire(wirePath, opts...); err != nil {
@@ -116,6 +150,47 @@ func Execute() {
 	}
 }
 
+// handleInitConfig function    处理初始化配置文件.
+func handleInitConfig() error {
+	configPath := ".gutowire.yaml"
+	if configFile != "" {
+		configPath = configFile
+	}
+
+	if err := config.GenerateExampleConfig(configPath); err != nil {
+		return fmt.Errorf("生成配置文件失败: %w", err)
+	}
+
+	fmt.Printf("✓ 配置文件已生成: %s\n", configPath)
+	fmt.Println("\n你可以编辑此文件来自定义配置")
+	return nil
+}
+
+// handleWatch function    处理 watch 模式.
+func handleWatch(wirePath, searchPath string, opts []config.Option) error {
+	fmt.Println("🔍 启动 Watch 模式...")
+
+	// 首先执行一次生成
+	if err := runner.RunAutoWire(wirePath, opts...); err != nil {
+		return fmt.Errorf("初始生成失败: %w", err)
+	}
+
+	fmt.Println("✓ 初始生成完成")
+
+	// 创建 watcher
+	w, err := watcher.New(wirePath, []string{"*.gen.go", "wire_gen.go"}, opts...)
+	if err != nil {
+		return fmt.Errorf("创建监听器失败: %w", err)
+	}
+	defer w.Close()
+
+	// 开始监听
+	if searchPath == "" {
+		searchPath = "."
+	}
+	return w.Watch(searchPath)
+}
+
 func init() {
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
@@ -128,4 +203,8 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&wirePath, "wire_path", "w", "", "Wire 配置文件生成路径")
 	rootCmd.PersistentFlags().StringVarP(&scope, "scope", "s", "", "依赖搜索范围(目录路径),不填则全局搜索")
 	rootCmd.PersistentFlags().StringVarP(&pkg, "pkg", "p", "", "生成文件的包名")
+	rootCmd.PersistentFlags().StringVarP(&configFile, "config", "c", "", "配置文件路径 (默认: .gutowire.yaml)")
+	rootCmd.PersistentFlags().BoolVar(&watch, "watch", false, "启用 watch 模式，自动监听文件变化")
+	rootCmd.PersistentFlags().BoolVar(&noCache, "no-cache", false, "禁用缓存")
+	rootCmd.PersistentFlags().BoolVar(&initConfig, "init", false, "生成示例配置文件")
 }
