@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file. See [conven
 ---
 ## [unreleased]
 
+### Miscellaneous Chores
+
+- update CHANGELOG.md - ([1608f3e](https://github.com/Anniext/demo/commit/1608f3ea5e79dd9fd65fd7e323c8b08187b2d3ae)) - spelens-gud
+
 ### Other
 
 - init - ([98e83ea](https://github.com/Anniext/demo/commit/98e83ea4d6ebcb8ac0cb479c07281a8e4e4c6809)) - xt
