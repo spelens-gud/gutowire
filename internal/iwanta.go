@@ -145,9 +145,9 @@ func IWantA(in interface{}, searchDepDirs ...string) (_ struct{}) {
 	}()
 
 	// 配置搜索路径
-	for _, s := range searchDepDirs {
-		wireOpt = append(wireOpt, WithSearchPath(s))
-	}
+	wireOpt = append(wireOpt, Map(searchDepDirs, func(s string) Option {
+		return WithSearchPath(s)
+	})...)
 
 	// 指定要初始化的类型
 	wireOpt = append(wireOpt, InitStruct(strings.TrimPrefix(wantTypeVar, "*")))
@@ -206,15 +206,17 @@ func (iw *iwantA) writeInitFile(wantVar, name string) (args []string, err error)
 	call := ""
 	ret := regexpInitMethod.FindStringSubmatch(string(initFileData))
 	if len(ret) >= 2 {
-		argsVar := make([]string, 0)
+		argsVar := []string{}
 		if len(ret) > 2 {
 			// 解析函数参数
-			for _, sp := range strings.Split(ret[2], ",") {
-				if spp := strings.SplitN(sp, " ", 2); len(spp) == 2 {
-					// 为每个参数生成零值
-					args = append(args, "&"+strings.TrimPrefix(spp[1], "*")+"{}")
-					argsVar = append(argsVar, spp[0])
-				}
+			params := Filter(strings.Split(ret[2], ","), func(sp string) bool {
+				return len(strings.SplitN(sp, " ", 2)) == 2
+			})
+			for _, sp := range params {
+				spp := strings.SplitN(sp, " ", 2)
+				// 为每个参数生成零值
+				args = append(args, "&"+strings.TrimPrefix(spp[1], "*")+"{}")
+				argsVar = append(argsVar, spp[0])
 			}
 		}
 		// 构造函数调用

@@ -403,7 +403,6 @@ func (sc *autoWireSearcher) clean() error {
 // set: Set 的名称（如 "animals"）
 // elements: 该 Set 包含的所有组件
 func (sc *autoWireSearcher) writeSet(set string, elements map[string]element) error {
-	order := make([]string, 0, len(elements))
 	pkgMap := make(map[string]map[string]string) // 用于处理包名冲突
 
 	setName := strings.Title(strcase.UpperCamelCase(set)) + "Set" // 如 AnimalsSet
@@ -413,11 +412,7 @@ func (sc *autoWireSearcher) writeSet(set string, elements map[string]element) er
 	log.Printf("正在生成 %s [ %s ]", setName, fileName)
 
 	// 收集所有元素的 key 并排序，保证生成顺序稳定
-	for key := range elements {
-		order = append(order, key)
-	}
-
-	slices.Sort(order)
+	order := SortedKeys(elements)
 
 	// 处理包名冲突
 	// 如果多个包有相同的名称，自动添加数字后缀
@@ -482,10 +477,9 @@ func (sc *autoWireSearcher) writeSet(set string, elements map[string]element) er
 			// 配置模式：使用 wire.FieldsOf 提取字段
 			slices.Sort(elem.fields)
 			// 构建字段列表字符串
-			fieldsList := make([]string, len(elem.fields))
-			for i, field := range elem.fields {
-				fieldsList[i] = fmt.Sprintf(`"%s"`, field)
-			}
+			fieldsList := Map(elem.fields, func(field string) string {
+				return fmt.Sprintf(`"%s"`, field)
+			})
 			fieldsStr := strings.Join(fieldsList, ", ")
 			wireItem = append(wireItem, fmt.Sprintf(`wire.FieldsOf(new(*%s), %s)`, stName, fieldsStr))
 			sc.mu.Lock()
