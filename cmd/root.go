@@ -16,13 +16,20 @@ import (
 	"github.com/charmbracelet/fang"
 	"github.com/charmbracelet/x/exp/charmtone"
 	"github.com/charmbracelet/x/term"
-	"github.com/spelens-gud/gutowire/internal"
+	"github.com/spelens-gud/gutowire/internal/config"
+	"github.com/spelens-gud/gutowire/internal/runner"
 	"github.com/spelens-gud/gutowire/internal/version"
 	"github.com/spf13/cobra"
 )
 
 const (
 	commandName = "gutowire"
+)
+
+var (
+	wirePath string
+	scope    string
+	pkg      string
 )
 
 // rootCmd represents the base command when called without any subcommands.
@@ -40,16 +47,16 @@ to quickly create a Cobra application.`,
 	// Run: func(cmd *cobra.Command, args []string) { },
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// 构建配置选项
-		var opts []internal.Option
+		var opts []config.Option
 
 		// 应用包名配置
 		if pkg != "" {
-			opts = append(opts, internal.WithPkg(pkg))
+			opts = append(opts, config.WithPkg(pkg))
 		}
 
 		// 应用搜索路径配置
 		if scope != "" {
-			opts = append(opts, internal.WithSearchPath(scope))
+			opts = append(opts, config.WithSearchPath(scope))
 		}
 
 		// 从位置参数或标志获取生成路径
@@ -63,10 +70,10 @@ to quickly create a Cobra application.`,
 		}
 
 		// 添加默认的初始化配置
-		opts = append(opts, internal.InitStruct())
+		opts = append(opts, config.InitStruct())
 
 		// 执行自动装配
-		if err := internal.RunAutoWire(wirePath, opts...); err != nil {
+		if err := runner.RunAutoWire(wirePath, opts...); err != nil {
 			return fmt.Errorf("自动装配失败: %w", err)
 		}
 

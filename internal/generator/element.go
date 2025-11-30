@@ -1,11 +1,11 @@
-package internal
+package generator
 
 import (
 	"go/ast"
 	"go/token"
 )
 
-// tmpDecl 临时声明信息，用于解析 AST 时存储类型或函数的信息.
+// tmpDecl struct    临时声明信息，用于解析 AST 时存储类型或函数的信息.
 type tmpDecl struct {
 	docs     string        // 文档注释（包含 @autowire 注解）
 	name     string        // 名称
@@ -13,7 +13,7 @@ type tmpDecl struct {
 	typeSpec *ast.TypeSpec // 类型规范（如果是类型声明）
 }
 
-// getImplement 分析文件中的接口实现声明
+// getImplement function    分析文件中的接口实现声明
 // 查找类似 var _ io.Writer = &myWriter{} 的接口实现声明
 // 返回 map[实现类型名]接口名.
 func getImplement(f *ast.File) map[string]string {
@@ -34,7 +34,7 @@ func getImplement(f *ast.File) map[string]string {
 	return ret
 }
 
-// parseValueSpec 解析变量声明规范，提取接口实现信息.
+// parseValueSpec function    解析变量声明规范，提取接口实现信息.
 func parseValueSpec(spec ast.Spec) (implType, interfaceName string) {
 	vs, ok := spec.(*ast.ValueSpec)
 	// 检查是否为 var _ InterfaceName = ... 格式
@@ -54,7 +54,7 @@ func parseValueSpec(spec ast.Spec) (implType, interfaceName string) {
 	return implTypeName, interfaceIdent.Name
 }
 
-// extractImplTypeName 从表达式中提取实现类型名称.
+// extractImplTypeName function    从表达式中提取实现类型名称.
 func extractImplTypeName(expr ast.Expr) string {
 	switch t := expr.(type) {
 	case *ast.CompositeLit:
@@ -69,7 +69,7 @@ func extractImplTypeName(expr ast.Expr) string {
 	return ""
 }
 
-// extractFromUnaryExpr 从一元表达式中提取类型名称.
+// extractFromUnaryExpr function    从一元表达式中提取类型名称.
 func extractFromUnaryExpr(ue *ast.UnaryExpr) string {
 	if ue.Op != token.AND {
 		return ""

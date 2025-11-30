@@ -1,4 +1,4 @@
-package internal
+package iwanta
 
 // 快速原型开发工具模块
 // 提供 IWantA 魔法函数，用于快速获取任何类型的实例
@@ -14,6 +14,9 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/spelens-gud/gutowire/internal/config"
+	"github.com/spelens-gud/gutowire/internal/parser"
+	"github.com/spelens-gud/gutowire/internal/runner"
 	"github.com/stoewer/go-strcase"
 )
 
@@ -31,7 +34,7 @@ func thisIsYour%s(res *%s,%s) (err error, cleanup func()) {
 // regexpCall 用于匹配 IWantA 调用的正则表达式.
 var regexpCall = regexp.MustCompile(`gutowire\.IWantA\(&([a-zA-Z]+).*?\)`)
 
-// iwantA IWantA 功能的内部状态.
+// iwantA struct    功能的内部状态.
 type iwantA struct {
 	wantInputIdent     string   // 输入参数的标识符
 	thisIsYourFuncName string   // 生成的函数名称
@@ -40,7 +43,7 @@ type iwantA struct {
 	callFile           string   // 调用文件的路径
 }
 
-// initWantArgIdent 初始化输入参数标识符
+// initWantArgIdent method    初始化输入参数标识符
 // 从调用代码中提取变量名.
 func (iw *iwantA) initWantArgIdent() {
 	callLineStr := regexpCall.FindAllStringSubmatch(strings.TrimSpace(iw.callFileLines[iw.callLine-1]), -1)
@@ -59,7 +62,7 @@ func (iw *iwantA) initWantArgIdent() {
 	}
 }
 
-// IWantA 魔法函数：快速获取任何类型的实例
+// IWantA function    魔法函数：快速获取任何类型的实例
 // 这是一个特殊的开发辅助工具，用于快速原型开发和测试
 //
 // 工作原理：
@@ -80,7 +83,7 @@ func (iw *iwantA) initWantArgIdent() {
 func IWantA(in interface{}, searchDepDirs ...string) (_ struct{}) {
 	// 如果未指定搜索目录，使用模块根目录
 	if len(searchDepDirs) == 0 {
-		modPath := getGoModDir()
+		modPath := parser.GetGoModDir()
 		if len(modPath) > 0 {
 			searchDepDirs = append(searchDepDirs, modPath)
 		}
@@ -113,8 +116,8 @@ func IWantA(in interface{}, searchDepDirs ...string) (_ struct{}) {
 		genSuccess  bool
 
 		rType       = reflect.TypeOf(in).Elem()
-		modeBase, _ = getModBase()
-		callPkgPath = getPkgPath(callFile, modeBase)
+		modeBase, _ = parser.GetModBase()
+		callPkgPath = parser.GetPkgPath(callFile, modeBase)
 	)
 
 	// 确定类型的完整名称
@@ -126,11 +129,9 @@ func IWantA(in interface{}, searchDepDirs ...string) (_ struct{}) {
 		wantTypeVar = rType.String()
 	}
 
-	var (
-		wantTypeName = strcase.SnakeCase(strings.Replace(strings.Replace(wantTypeVar, "_", "", -1), ".", "_", -1))
-		genPath      = filepath.Dir(callFile)
-		wireOpt      = make([]Option, 0)
-	)
+	wantTypeName := strcase.SnakeCase(strings.Replace(strings.Replace(wantTypeVar, "_", "", -1), ".", "_", -1))
+	genPath := filepath.Dir(callFile)
+	wireOpt := make([]config.Option, 0)
 
 	iw.thisIsYourFuncName = strcase.UpperCamelCase(wantTypeName)
 
@@ -144,15 +145,15 @@ func IWantA(in interface{}, searchDepDirs ...string) (_ struct{}) {
 	}()
 
 	// 配置搜索路径
-	wireOpt = append(wireOpt, Map(searchDepDirs, func(s string) Option {
-		return WithSearchPath(s)
+	wireOpt = append(wireOpt, parser.Map(searchDepDirs, func(s string) config.Option {
+		return config.WithSearchPath(s)
 	})...)
 
 	// 指定要初始化的类型
-	wireOpt = append(wireOpt, InitStruct(strings.TrimPrefix(wantTypeVar, "*")))
+	wireOpt = append(wireOpt, config.InitStruct(strings.TrimPrefix(wantTypeVar, "*")))
 
 	// 运行 autowire 生成代码
-	if err := RunAutoWire(genPath, wireOpt...); err != nil {
+	if err := runner.RunAutoWire(genPath, wireOpt...); err != nil {
 		panic(err)
 	}
 
@@ -171,7 +172,7 @@ func IWantA(in interface{}, searchDepDirs ...string) (_ struct{}) {
 	return struct{}{}
 }
 
-// updateCallFile 更新调用文件，将 IWantA 替换为生成的函数.
+// updateCallFile method    更新调用文件，将 IWantA 替换为生成的函数.
 func (iw *iwantA) updateCallFile(configArgs []string) (err error) {
 	callLine := strings.TrimSpace(iw.callFileLines[iw.callLine-1])
 	callArgs := strings.Join(append([]string{iw.wantInputIdent}, configArgs...), ",")
@@ -185,30 +186,32 @@ func (iw *iwantA) updateCallFile(configArgs []string) (err error) {
 	// 注释掉原来的 IWantA 调用
 	iw.callFileLines[iw.callLine-1] = "// " + callLine
 	// 插入新的调用代码
-	iw.callFileLines = append(iw.callFileLines[:iw.callLine], append([]string{assignStr}, iw.callFileLines[iw.callLine:]...)...)
-	return importAndWrite(iw.callFile, []byte(strings.Join(iw.callFileLines, "\n")))
+	iw.callFileLines = append(iw.callFileLines[:iw.callLine],
+		append([]string{assignStr}, iw.callFileLines[iw.callLine:]...)...)
+	return parser.ImportAndWrite(iw.callFile, []byte(strings.Join(iw.callFileLines, "\n")))
 }
 
 // regexpInitMethod 用于匹配 Initialize 函数的正则表达式.
 var regexpInitMethod = regexp.MustCompile(`Initialize(.+?)\((.*?)\)`)
 
-// writeInitFile 生成初始化辅助文件
+// writeInitFile method    生成初始化辅助文件
 // 读取 wire_gen.go，提取 Initialize 函数，生成 thisIsYour 包装函数.
 func (iw *iwantA) writeInitFile(wantVar, name string) (args []string, err error) {
 	genPath := filepath.Dir(iw.callFile)
+	//nolint:gosec
 	initFileData, err := os.ReadFile(filepath.Join(genPath, "wire_gen.go"))
 	if err != nil {
 		return nil, fmt.Errorf("读取 wire_gen.go 失败: %w", err)
 	}
 
 	// 从 wire_gen.go 中提取 Initialize 函数签名
-	call := ""
+	var call string
 	ret := regexpInitMethod.FindStringSubmatch(string(initFileData))
 	if len(ret) >= 2 {
-		argsVar := []string{}
+		var argsVar []string
 		if len(ret) > 2 {
 			// 解析函数参数
-			params := Filter(strings.Split(ret[2], ","), func(sp string) bool {
+			params := parser.Filter(strings.Split(ret[2], ","), func(sp string) bool {
 				return len(strings.SplitN(sp, " ", 2)) == 2
 			})
 			for _, sp := range params {
@@ -222,11 +225,11 @@ func (iw *iwantA) writeInitFile(wantVar, name string) (args []string, err error)
 		call = fmt.Sprintf(`Initialize%s(%s)`, ret[1], strings.Join(argsVar, ","))
 	} else {
 		err = errors.New("invalid init file")
-		return
+		return nil, err
 	}
 
 	// 生成文件名
-	filename := fmt.Sprintf("%s_init", strcase.SnakeCase(name))
+	filename := strcase.SnakeCase(name) + "_init"
 	if strings.HasSuffix(iw.callFile, "_test.go") {
 		filename += "_test"
 	}
@@ -235,13 +238,13 @@ func (iw *iwantA) writeInitFile(wantVar, name string) (args []string, err error)
 	// 生成 thisIsYour 函数
 	initFileData = append(initFileData, fmt.Sprintf(thisIsYourTemplate, iw.thisIsYourFuncName, wantVar, ret[2], call)...)
 	initFileName := filepath.Join(genPath, filename)
-	if err = importAndWrite(initFileName, initFileData); err != nil {
+	if err = parser.ImportAndWrite(initFileName, initFileData); err != nil {
 		return nil, fmt.Errorf("写入初始化文件失败: %w", err)
 	}
 	return args, nil
 }
 
-// cleanIWantATemp 清理 IWantA 生成的临时文件
+// cleanIWantATemp method    清理 IWantA 生成的临时文件
 // 删除所有 autowire 相关文件和 wire 生成文件.
 func (iw *iwantA) cleanIWantATemp(f string) {
 	dir := filepath.Dir(f)

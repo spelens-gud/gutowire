@@ -1,4 +1,4 @@
-package internal
+package parser
 
 import (
 	"bytes"
@@ -31,9 +31,9 @@ var (
 	importMu sync.Mutex
 )
 
-// getPathGoPkgName    获取指定目录的 Go 包名
+// GetPathGoPkgName    获取指定目录的 Go 包名
 // 通过解析目录中的 .go 文件来确定包名.
-func getPathGoPkgName(pathStr string) (pkg string, err error) {
+func GetPathGoPkgName(pathStr string) (pkg string, err error) {
 	entries, err := os.ReadDir(pathStr)
 	if err != nil {
 		return "", fmt.Errorf("读取目录失败: %w", err)
@@ -53,7 +53,7 @@ func getPathGoPkgName(pathStr string) (pkg string, err error) {
 		name := entry.Name()
 
 		// 跳过非 Go 文件
-		if !checkFileType(name) {
+		if !CheckFileType(name) {
 			continue
 		}
 
@@ -82,26 +82,26 @@ func getGoPkgNameByDir(pathStr string) (pkg string) {
 	return filepath.Base(pathStr)
 }
 
-// checkFileType function    检查文件类型.
+// CheckFileType function    检查文件类型.
 // 用于跳过非go文件或者测试文件.
-func checkFileType(name string) bool {
+func CheckFileType(name string) bool {
 	if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 		return false
 	}
 	return true
 }
 
-// getGoModDir 获取 go.mod 文件所在的目录
+// GetGoModDir 获取 go.mod 文件所在的目录
 // 这通常是项目的根目录.
-func getGoModDir() (modPath string) {
-	mod := getGoModFilePath()
+func GetGoModDir() (modPath string) {
+	mod := GetGoModFilePath()
 	modPath = filepath.Dir(mod)
 	return
 }
 
-// getGoModFilePath    获取 go.mod 文件的完整路径
+// GetGoModFilePath    获取 go.mod 文件的完整路径
 // 使用 sync.Once 确保只执行一次 go env 命令.
-func getGoModFilePath() (modPath string) {
+func GetGoModFilePath() (modPath string) {
 	o.Do(func() {
 		// 执行 go env GOMOD 获取 go.mod 路径
 		cmd := exec.Command(
@@ -117,11 +117,11 @@ func getGoModFilePath() (modPath string) {
 	return modTmp
 }
 
-// getModBase 获取当前 Go 模块的基础路径
+// GetModBase function    获取当前 Go 模块的基础路径
 // 例如: github.com/Just-maple/go-autowire
 // 这个路径用于计算包的完整导入路径.
-func getModBase() (modBase string, err error) {
-	modPath := getGoModFilePath()
+func GetModBase() (modBase string, err error) {
+	modPath := GetGoModFilePath()
 	//nolint:gosec
 	mb, err := os.ReadFile(modPath)
 	if err != nil {
@@ -142,18 +142,18 @@ func getModBase() (modBase string, err error) {
 	return
 }
 
-// getPkgPath 计算文件的完整包导入路径
+// GetPkgPath function    计算文件的完整包导入路径
 // 例如: github.com/Just-maple/go-autowire/example/dependencies
 //
 // filePath: 文件的绝对或相对路径
 // modBase: 模块的基础路径.
-func getPkgPath(filePath, modBase string) (pkgPath string) {
+func GetPkgPath(filePath, modBase string) (pkgPath string) {
 	abs, err := filepath.Abs(filePath)
 	if err != nil {
 		return
 	}
 
-	dir := getGoModDir()
+	dir := GetGoModDir()
 	if len(abs) < len(dir) {
 		return
 	}
@@ -163,18 +163,18 @@ func getPkgPath(filePath, modBase string) (pkgPath string) {
 	return
 }
 
-// appendPkg 拼接包名和选择器
+// AppendPkg function    拼接包名和选择器
 // 如果包名为空，直接返回选择器
 // 例如: appendPkg("pkg", "Type") -> "pkg.Type".
-func appendPkg(pkg string, sel string) string {
+func AppendPkg(pkg string, sel string) string {
 	if len(pkg) == 0 {
 		return sel
 	}
 	return pkg + "." + sel
 }
 
-// 自动添加缺失的 import，移除未使用的 import，并格式化代码.
-func importAndWrite(filename string, src []byte) error {
+// ImportAndWrite function    自动添加缺失的 import，移除未使用的 import，并格式化代码.
+func ImportAndWrite(filename string, src []byte) error {
 	writeData, err := importProcess(src)
 	if err != nil {
 		return fmt.Errorf("处理 import 语句失败: %w", err)
@@ -187,7 +187,7 @@ func importAndWrite(filename string, src []byte) error {
 	return nil
 }
 
-// importProcess 处理代码的 import 语句
+// importProcess function    处理代码的 import 语句
 // 使用 goimports 自动添加、删除和格式化 import.
 func importProcess(src []byte) ([]byte, error) {
 	importMu.Lock()

@@ -1,7 +1,7 @@
 package test_c
 
 import (
-	test_b2 "github.com/spelens-gud/gutowire/example/dependencies/test_b"
+	test_b2 "github.com/spelens-gud/gutowire/examples/dependencies/test_b"
 )
 
 // @autowire(set=struct)

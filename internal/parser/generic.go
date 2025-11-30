@@ -1,4 +1,4 @@
-package internal
+package parser
 
 import (
 	"cmp"
@@ -8,7 +8,7 @@ import (
 // Set 泛型集合类型，用于去重.
 type Set[T comparable] map[T]struct{}
 
-// NewSet 创建一个新的集合.
+// NewSet function    创建一个新的集合.
 func NewSet[T comparable](items ...T) Set[T] {
 	s := make(Set[T], len(items))
 	for _, item := range items {
@@ -17,18 +17,18 @@ func NewSet[T comparable](items ...T) Set[T] {
 	return s
 }
 
-// Add 向集合添加元素.
+// Add method    向集合添加元素.
 func (s Set[T]) Add(item T) {
 	s[item] = struct{}{}
 }
 
-// Contains 检查集合是否包含元素.
+// Contains method    检查集合是否包含元素.
 func (s Set[T]) Contains(item T) bool {
 	_, ok := s[item]
 	return ok
 }
 
-// ToSlice 将集合转换为切片.
+// ToSlice method    将集合转换为切片.
 func (s Set[T]) ToSlice() []T {
 	result := make([]T, 0, len(s))
 	for item := range s {
@@ -37,7 +37,7 @@ func (s Set[T]) ToSlice() []T {
 	return result
 }
 
-// SortedKeys 返回 map 的排序键列表(泛型版本).
+// SortedKeys function    返回 map 的排序键列表.
 func SortedKeys[K cmp.Ordered, V any](m map[K]V) []K {
 	keys := make([]K, 0, len(m))
 	for k := range m {
@@ -47,7 +47,7 @@ func SortedKeys[K cmp.Ordered, V any](m map[K]V) []K {
 	return keys
 }
 
-// Filter 过滤切片元素(泛型版本).
+// Filter function    过滤切片元素.
 func Filter[T any](slice []T, predicate func(T) bool) []T {
 	result := make([]T, 0, len(slice))
 	for _, item := range slice {
@@ -58,7 +58,7 @@ func Filter[T any](slice []T, predicate func(T) bool) []T {
 	return result
 }
 
-// Map 映射切片元素(泛型版本).
+// Map function    映射切片元素.
 func Map[T, U any](slice []T, mapper func(T) U) []U {
 	result := make([]U, len(slice))
 	for i, item := range slice {
@@ -67,7 +67,7 @@ func Map[T, U any](slice []T, mapper func(T) U) []U {
 	return result
 }
 
-// Unique 去重切片(泛型版本).
+// Unique function    去重切片.
 func Unique[T comparable](slice []T) []T {
 	seen := make(Set[T], len(slice))
 	result := make([]T, 0, len(slice))
