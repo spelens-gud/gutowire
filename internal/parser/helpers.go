@@ -1,3 +1,5 @@
+// Package parser 提供了 Go 代码解析和处理的辅助工具。
+// 包含模块路径解析、包名提取、import 处理、代码格式化等功能。
 package parser
 
 import (

@@ -1,3 +1,5 @@
+// Package runner 提供了 gutowire 的主执行流程。
+// 协调配置初始化、代码扫描、Wire 配置生成和 wire 命令执行等步骤。
 package runner
 
 import (

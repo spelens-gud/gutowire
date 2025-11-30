@@ -1,8 +1,7 @@
-package iwanta
-
-// 快速原型开发工具模块
+// Package iwanta 快速原型开发工具模块
 // 提供 IWantA 魔法函数，用于快速获取任何类型的实例
 // 适用于测试和原型开发场景
+package iwanta
 
 import (
 	"errors"

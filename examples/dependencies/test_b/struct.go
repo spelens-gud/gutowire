@@ -1,3 +1,5 @@
+// Package test_b 提供了测试用的依赖组件。
+// 用于演示跨包的依赖注入和包名冲突处理。
 package test_b
 
 import (

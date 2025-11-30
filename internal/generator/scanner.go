@@ -1,3 +1,6 @@
+// Package generator 负责扫描和生成 Wire 配置代码。
+// 核心功能包括：递归扫描 Go 源文件、解析 @autowire 注解、
+// 生成 Wire Set 配置文件、处理依赖关系和接口绑定。
 package generator
 
 import (

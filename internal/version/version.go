@@ -1,3 +1,5 @@
+// Package version 管理 gutowire 的版本信息。
+// 版本号可以在编译时通过 -ldflags 设置，或从 Go 模块信息中读取。
 package version
 
 import "runtime/debug"

@@ -1,3 +1,5 @@
+// Package cmd 实现了 gutowire 的命令行接口。
+// 提供了主命令和相关的子命令，处理命令行参数解析和执行流程。
 package cmd
 
 /*

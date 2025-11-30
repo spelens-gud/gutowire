@@ -1,3 +1,5 @@
+// Package config 提供了 gutowire 的配置管理功能。
+// 包含配置选项的定义和处理，支持自定义包名、搜索路径、初始化类型等配置。
 package config
 
 var (

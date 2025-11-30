@@ -1,3 +1,5 @@
+// Package test_c 提供了另一组测试用的依赖组件。
+// 用于演示多包依赖和依赖链的处理。
 package test_c
 
 import (

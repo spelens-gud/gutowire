@@ -1,3 +1,6 @@
+// Package dependencies 提供了依赖注入的示例代码。
+// 演示了如何使用 @autowire 注解标记结构体和函数，
+// 以及如何处理复杂的依赖关系和接口绑定。
 package dependencies
 
 import (
