@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/spelens-gud/gutowire/internal/config"
+	"github.com/spelens-gud/gutowire/internal/errors"
 	"github.com/spelens-gud/gutowire/internal/parser"
 	"github.com/stoewer/go-strcase"
 	"golang.org/x/sync/errgroup"
@@ -40,30 +41,43 @@ type AutoWireSearcher struct {
 	initWire       []string                      // 需要初始化的类型
 	wg             errgroup.Group                // 并发控制
 	mu             sync.Mutex                    // 并发安全锁
+	cache          *CacheManager                 // 缓存管理器
+	excludeDirs    []string                      // 排除的目录列表
 }
 
 // NewAutoWireSearcher function    创建一个自动装配搜索器.
-func NewAutoWireSearcher(genPath string, modBase string, initWire []string, pkg string) *AutoWireSearcher {
+func NewAutoWireSearcher(genPath string, modBase string, initWire []string, pkg string, enableCache bool,
+	excludeDirs []string) *AutoWireSearcher {
+	if len(excludeDirs) == 0 {
+		excludeDirs = []string{"vendor", "testdata", ".git"}
+	}
 	return &AutoWireSearcher{
-		genPath:    genPath,
-		modBase:    modBase,
-		initWire:   initWire,
-		ElementMap: make(map[string]map[string]Element),
-		pkg:        pkg,
+		genPath:     genPath,
+		modBase:     modBase,
+		initWire:    initWire,
+		ElementMap:  make(map[string]map[string]Element),
+		pkg:         pkg,
+		cache:       NewCacheManager(genPath, enableCache),
+		excludeDirs: excludeDirs,
 	}
 }
 
 // SearchAllPath method    递归扫描指定目录下的所有 Go 文件
-// 跳过 vendor 和 testdata 目录，跳过测试文件.
+// 跳过配置的排除目录，跳过测试文件.
 func (sc *AutoWireSearcher) SearchAllPath(file string) (err error) {
+	// 加载缓存
+	if err := sc.cache.Load(); err != nil {
+		log.Printf("[warn] 加载缓存失败: %v", err)
+	}
+
 	var files []string
 
 	// 第一步：收集所有需要处理的文件
 	err = filepath.Walk(file, func(path string, f os.FileInfo, _ error) error {
 		fn := f.Name()
 
-		// 跳过 vendor 和 testdata 目录
-		if f.IsDir() && (fn == "vendor" || fn == "testdata") {
+		// 跳过配置的排除目录
+		if f.IsDir() && sc.isExcludedDir(fn) {
 			return filepath.SkipDir
 		}
 
@@ -81,10 +95,10 @@ func (sc *AutoWireSearcher) SearchAllPath(file string) (err error) {
 	}
 
 	// 第二步：并发处理所有文件
-	for _, path := range files {
-		path := path // 捕获循环变量
+	for _, filePath := range files {
+		// filePath := filePath // 捕获循环变量
 		sc.wg.Go(func() error {
-			return sc.searchWire(path)
+			return sc.searchWire(filePath)
 		})
 	}
 
@@ -92,8 +106,95 @@ func (sc *AutoWireSearcher) SearchAllPath(file string) (err error) {
 	return sc.wg.Wait()
 }
 
+// isExcludedDir method    检查目录是否应该被排除.
+func (sc *AutoWireSearcher) isExcludedDir(dirName string) bool {
+	for _, excluded := range sc.excludeDirs {
+		if dirName == excluded {
+			return true
+		}
+	}
+	return false
+}
+
 // searchWire method    扫描单个 Go 文件，查找并解析 @autowire 注解.
-// quickCheckForTag method    快速检查文件是否包含 @autowire 标记
+func (sc *AutoWireSearcher) searchWire(file string) error {
+	// 检查缓存：如果文件未修改，使用缓存的结果
+	if modified, err := sc.cache.IsModified(file); err == nil && !modified {
+		if elements, ok := sc.cache.Get(file); ok {
+			// 使用缓存的元素
+			sc.addCachedElements(elements, file)
+			return nil
+		}
+	}
+
+	// 快速检查：扫描文件前100行，如果没有 @autowire 标记则跳过
+	hasTag, err := sc.quickCheckForTag(file)
+	if err != nil {
+		return errors.WrapError(err, fmt.Sprintf("快速检查文件 %s 失败", file))
+	}
+	if !hasTag {
+		return nil
+	}
+
+	// 读取文件内容
+	//nolint:gosec
+	data, err := os.ReadFile(file)
+	if err != nil {
+		return errors.NewFileNotFoundError(file)
+	}
+
+	// 解析 Go 源文件的 AST
+	parseFile, err := goparser.ParseFile(token.NewFileSet(), "", data, goparser.ParseComments)
+	if err != nil {
+		return errors.WrapError(err, fmt.Sprintf("解析文件 %s 失败", file))
+	}
+
+	// 检查是否会导致循环导入
+	if sc.wouldCauseCircularImport(parseFile, file) {
+		return nil
+	}
+
+	// 收集所有带 @autowire 注解的声明
+	matchDecls := sc.collectAnnotatedDecls(parseFile)
+
+	// 获取接口实现关系
+	implementMap := getImplement(parseFile)
+
+	// 计算包路径（只计算一次）
+	pkgPath := sc.getPkgPath(file)
+
+	// 解析每个声明的注解
+	elements := sc.parseAnnotations(matchDecls, file, pkgPath, parseFile, implementMap)
+
+	// 更新缓存
+	if err := sc.cache.Set(file, elements); err != nil {
+		log.Printf("[warn] 更新缓存失败: %v", err)
+	}
+
+	return nil
+}
+
+// addCachedElements method    添加缓存的元素到 ElementMap.
+func (sc *AutoWireSearcher) addCachedElements(elements []Element, file string) {
+	pkgPath := sc.getPkgPath(file)
+	for _, elem := range elements {
+		setName := "unknown"
+		if elem.InitWire {
+			setName = "init"
+		} else if elem.ConfigWire {
+			setName = "config"
+		}
+
+		sc.mu.Lock()
+		if sc.ElementMap[setName] == nil {
+			sc.ElementMap[setName] = make(map[string]Element)
+		}
+		sc.ElementMap[setName][path.Join(pkgPath, elem.Name)] = elem
+		sc.mu.Unlock()
+	}
+}
+
+// quickCheckForTag method    快速检查文件是否包含 @autowire 标记
 // 只扫描文件前100行，避免读取整个大文件.
 func (sc *AutoWireSearcher) quickCheckForTag(file string) (bool, error) {
 	//nolint:gosec
@@ -119,49 +220,6 @@ func (sc *AutoWireSearcher) quickCheckForTag(file string) (bool, error) {
 	return false, scanner.Err()
 }
 
-func (sc *AutoWireSearcher) searchWire(file string) error {
-	// 快速检查：扫描文件前100行，如果没有 @autowire 标记则跳过
-	hasTag, err := sc.quickCheckForTag(file)
-	if err != nil {
-		return fmt.Errorf("快速检查文件 %s 失败: %w", file, err)
-	}
-	if !hasTag {
-		return nil
-	}
-
-	// 读取文件内容
-	//nolint:gosec
-	data, err := os.ReadFile(file)
-	if err != nil {
-		return fmt.Errorf("读取文件 %s 失败: %w", file, err)
-	}
-
-	// 解析 Go 源文件的 AST
-	parseFile, err := goparser.ParseFile(token.NewFileSet(), "", data, goparser.ParseComments)
-	if err != nil {
-		return fmt.Errorf("解析文件 %s 失败: %w", file, err)
-	}
-
-	// 检查是否会导致循环导入
-	if sc.wouldCauseCircularImport(parseFile, file) {
-		return nil
-	}
-
-	// 收集所有带 @autowire 注解的声明
-	matchDecls := sc.collectAnnotatedDecls(parseFile)
-
-	// 获取接口实现关系
-	implementMap := getImplement(parseFile)
-
-	// 计算包路径（只计算一次）
-	pkgPath := sc.getPkgPath(file)
-
-	// 解析每个声明的注解
-	sc.parseAnnotations(matchDecls, file, pkgPath, parseFile, implementMap)
-
-	return nil
-}
-
 // wouldCauseCircularImport method    检查是否会引发循环导入.
 func (sc *AutoWireSearcher) wouldCauseCircularImport(parseFile *ast.File, file string) bool {
 	genPkgPath := fmt.Sprintf(`"%s"`, sc.getPkgPath(filepath.Join(sc.genPath, "...")))
@@ -181,7 +239,7 @@ func (sc *AutoWireSearcher) collectAnnotatedDecls(parseFile *ast.File) []tmpDecl
 	for _, decl := range parseFile.Decls {
 		switch d := decl.(type) {
 		case *ast.GenDecl:
-			// 只处理 type 壀查
+			// 只处理 type 声明
 			if d.Tok.String() != "type" {
 				continue
 			}
@@ -242,16 +300,20 @@ func (sc *AutoWireSearcher) collectTypeDecls(d *ast.GenDecl) []tmpDecl {
 	return result
 }
 
-// parseAnnotations method    解析声明的注解.
+// parseAnnotations method    解析声明的注解，返回解析出的元素列表.
 func (sc *AutoWireSearcher) parseAnnotations(matchDecls []tmpDecl, file string, pkgPath string,
-	parseFile *ast.File, implementMap map[string]string) {
+	parseFile *ast.File, implementMap map[string]string) []Element {
+	var elements []Element
 	for _, decl := range matchDecls {
 		lines := strings.Split(decl.docs, "\n")
 		for _, c := range lines {
-			sc.analysisWireTag(strings.TrimSpace(c), file, pkgPath, &decl,
-				parseFile, implementMap)
+			if elem := sc.analysisWireTag(strings.TrimSpace(c), file, pkgPath, &decl,
+				parseFile, implementMap); elem != nil {
+				elements = append(elements, *elem)
+			}
 		}
 	}
+	return elements
 }
 
 // getPkgPath method    获取文件的完整包导入路径
@@ -260,25 +322,19 @@ func (sc *AutoWireSearcher) getPkgPath(filePath string) (pkgPath string) {
 	return parser.GetPkgPath(filePath, sc.modBase)
 }
 
-// analysisWireTag method    解析单行 @autowire 注解
-// 这是注解解析的核心函数，支持多种注解格式：
-// - @autowire(set=animals) - 基础用法
-// - @autowire.init(set=zoo) - 生成初始化函数
-// - @autowire.config(set=config) - 配置注入
-// - @autowire(set=animals,FlyAnimal) - 接口绑定
-// - @autowire(set=animals,new=CustomConstructor) - 自定义构造函数.
+// analysisWireTag method    解析单行 @autowire 注解，返回解析出的元素.
 func (sc *AutoWireSearcher) analysisWireTag(tag, filePath string, pkgPath string, decl *tmpDecl, f *ast.File,
-	implementMap map[string]string) {
+	implementMap map[string]string) *Element {
 	// 检查是否为 @autowire 注解
 	if !strings.HasPrefix(tag, config.WireTag) {
-		return
+		return nil
 	}
 
 	itemFunc, tagStr := sc.parseTagSuffix(tag)
 
 	// 检查括号格式
 	if !strings.HasPrefix(tagStr, "(") || !strings.HasSuffix(tagStr, ")") {
-		return
+		return nil
 	}
 
 	// 解析注解参数
@@ -302,8 +358,10 @@ func (sc *AutoWireSearcher) analysisWireTag(tag, filePath string, pkgPath string
 	// 添加接口实现关系
 	sc.addInterfaceImplementations(&wireElement, implementMap, decl.name)
 
-	// 延迟执行：将组件添加到 elementMap
+	// 将组件添加到 elementMap
 	sc.addElementToMap(setName, pkgPath, wireElement, decl.name)
+
+	return &wireElement
 }
 
 // parseTagSuffix method    解析 .init 或 .config 后缀.
@@ -448,7 +506,7 @@ func (sc *AutoWireSearcher) isValidConfigDeclaration(decl *tmpDecl) bool {
 	return isStruct && st.Fields != nil && len(st.Fields.List) > 0
 }
 
-// extractFieldName 提取字段名称.
+// extractFieldName method    提取字段名称.
 func (sc *AutoWireSearcher) extractFieldName(f *ast.Field) string {
 	fieldName := fmt.Sprintf("%s", f.Type)
 	if f.Names != nil {
@@ -457,7 +515,7 @@ func (sc *AutoWireSearcher) extractFieldName(f *ast.Field) string {
 	return fieldName
 }
 
-// isExportedField method    检查字段是否为导出字段（首字母大写.
+// isExportedField method    检查字段是否为导出字段（首字母大写）.
 func (sc *AutoWireSearcher) isExportedField(fieldName string) bool {
 	if len(fieldName) == 0 {
 		return false
@@ -467,7 +525,7 @@ func (sc *AutoWireSearcher) isExportedField(fieldName string) bool {
 	return r >= 'A' && r <= 'Z'
 }
 
-// addInterfaceImplementations 添加接口实现关系.
+// addInterfaceImplementations method    添加接口实现关系.
 func (sc *AutoWireSearcher) addInterfaceImplementations(wireElement *Element,
 	implementMap map[string]string, name string) {
 	if impl := implementMap[name]; impl != "" && !slices.Contains(wireElement.Implements, impl) {
@@ -508,6 +566,7 @@ func (sc *AutoWireSearcher) Write() error {
 
 	// 并发生成每个 Set 的文件
 	for set, m := range sc.ElementMap {
+		// set, m := set, m // 捕获循环变量
 		sc.wg.Go(func() error {
 			return sc.writeSet(set, m)
 		})
@@ -516,6 +575,11 @@ func (sc *AutoWireSearcher) Write() error {
 	// 等待所有 Set 文件生成完成
 	if err := sc.wg.Wait(); err != nil {
 		return fmt.Errorf("生成 Set 文件失败: %w", err)
+	}
+
+	// 保存缓存
+	if err := sc.cache.Save(); err != nil {
+		log.Printf("[warn] 保存缓存失败: %v", err)
 	}
 
 	// 生成汇总文件和初始化文件
@@ -661,7 +725,7 @@ func (sc *AutoWireSearcher) generateWireConfig(setName string, elements map[stri
 	return data, importPkg
 }
 
-// handleConfigWireElement metho    处理配置类型的 Wire 元素.
+// handleConfigWireElement method    处理配置类型的 Wire 元素.
 func (sc *AutoWireSearcher) handleConfigWireElement(elem *Element, wireItem *[]string, stName string) {
 	slices.Sort(elem.Fields)
 	// 构建字段列表字符串

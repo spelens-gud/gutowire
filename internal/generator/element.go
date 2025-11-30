@@ -70,12 +70,12 @@ func extractImplTypeName(expr ast.Expr) string {
 }
 
 // extractFromUnaryExpr function    从一元表达式中提取类型名称.
-func extractFromUnaryExpr(ue *ast.UnaryExpr) string {
-	if ue.Op != token.AND {
+func extractFromUnaryExpr(unaryExpr *ast.UnaryExpr) string {
+	if unaryExpr.Op != token.AND {
 		return ""
 	}
 
-	cl, ok := ue.X.(*ast.CompositeLit)
+	cl, ok := unaryExpr.X.(*ast.CompositeLit)
 	if !ok {
 		return ""
 	}

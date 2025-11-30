@@ -43,9 +43,9 @@ func New(genPath string, ignorePatterns []string, opts ...config.Option) (*Watch
 
 // Watch method    开始监听.
 func (w *Watcher) Watch(searchPath string) error {
-	log.Printf("🔍 开始监听目录: %s", searchPath)
+	log.Printf("> 开始监听目录: %s <", searchPath)
 	log.Printf("! 提示: 修改 .go 文件后将自动重新生成代码")
-	log.Printf("⏸  按 Ctrl+C 停止监听\n")
+	log.Printf("⏸  按 Ctrl+Z 停止监听\n")
 
 	// 递归添加目录到监听列表
 	if err := w.addRecursive(searchPath); err != nil {

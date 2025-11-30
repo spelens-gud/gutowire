@@ -9,10 +9,12 @@ import (
 
 // Opt struct    存储配置选项.
 type Opt struct {
-	SearchPath string   // 依赖搜索路径，指定在哪个目录下查找依赖
-	Pkg        string   // 生成文件的包名
-	GenPath    string   // 生成文件的输出路径
-	InitWire   []string // 需要生成初始化函数的类型列表
+	SearchPath  string   // 依赖搜索路径，指定在哪个目录下查找依赖
+	Pkg         string   // 生成文件的包名
+	GenPath     string   // 生成文件的输出路径
+	InitWire    []string // 需要生成初始化函数的类型列表
+	EnableCache bool     // 是否启用缓存
+	ExcludeDirs []string // 排除的目录列表
 }
 
 // Option 配置函数类型，用于设置 Opt.
@@ -24,7 +26,9 @@ type Option func(*Opt)
 // opts: 可选的配置函数
 func NewGenOpt(genPath string, opts ...Option) *Opt {
 	o := &Opt{
-		GenPath: genPath,
+		GenPath:     genPath,
+		EnableCache: true,                                   // 默认启用缓存
+		ExcludeDirs: []string{"vendor", "testdata", ".git"}, // 默认排除目录
 	}
 	for _, opt := range opts {
 		opt(o)

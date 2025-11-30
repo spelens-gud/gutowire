@@ -26,11 +26,11 @@ const (
 
 // FriendlyError struct    友好的错误信息.
 type FriendlyError struct {
-	Type        ErrorType
-	Message     string
-	Suggestions []string
-	Details     string
-	HelpURL     string
+	Type        ErrorType // 错误类型
+	Message     string    // 错误信息
+	Suggestions []string  // 建议列表
+	Details     string    // 错误详情
+	HelpURL     string    // 帮助链接
 }
 
 // Error method    实现 error 接口.
@@ -62,7 +62,7 @@ func (e *FriendlyError) Error() string {
 	return sb.String()
 }
 
-// NewCircularDepError 创建循环依赖错误.
+// NewCircularDepError function    创建循环依赖错误.
 func NewCircularDepError(pkg string) *FriendlyError {
 	return &FriendlyError{
 		Type:    ErrorTypeCircularDep,
@@ -76,7 +76,7 @@ func NewCircularDepError(pkg string) *FriendlyError {
 	}
 }
 
-// NewMissingDepError 创建缺少依赖错误.
+// NewMissingDepError function    创建缺少依赖错误.
 func NewMissingDepError(typeName string) *FriendlyError {
 	return &FriendlyError{
 		Type:    ErrorTypeMissingDep,
@@ -90,7 +90,7 @@ func NewMissingDepError(typeName string) *FriendlyError {
 	}
 }
 
-// NewInvalidAnnotationError 创建无效注解错误.
+// NewInvalidAnnotationError function    创建无效注解错误.
 func NewInvalidAnnotationError(annotation string, reason string) *FriendlyError {
 	return &FriendlyError{
 		Type:    ErrorTypeInvalidAnnotation,
@@ -105,7 +105,7 @@ func NewInvalidAnnotationError(annotation string, reason string) *FriendlyError 
 	}
 }
 
-// NewWireError 创建 Wire 错误.
+// NewWireError function    创建 Wire 错误.
 func NewWireError(output string) *FriendlyError {
 	suggestions := []string{
 		"检查是否有循环依赖",
@@ -130,7 +130,7 @@ func NewWireError(output string) *FriendlyError {
 	}
 }
 
-// NewFileNotFoundError 创建文件未找到错误.
+// NewFileNotFoundError function    创建文件未找到错误.
 func NewFileNotFoundError(path string) *FriendlyError {
 	return &FriendlyError{
 		Type:    ErrorTypeFileNotFound,
@@ -143,7 +143,7 @@ func NewFileNotFoundError(path string) *FriendlyError {
 	}
 }
 
-// WrapError 包装错误为友好错误.
+// WrapError function    包装错误为友好错误.
 func WrapError(err error, message string) *FriendlyError {
 	return &FriendlyError{
 		Type:    ErrorTypeUnknown,

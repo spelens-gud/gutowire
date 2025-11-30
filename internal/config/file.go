@@ -118,7 +118,7 @@ func GenerateExampleConfig(path string) error {
 		SearchPath:  "./",
 		OutputPath:  "./wire",
 		Package:     "wire",
-		InitTypes:   []string{"App", "Server"},
+		InitTypes:   []string{"*"},
 		EnableCache: true,
 		Parallel:    0,
 		ExcludeDirs: []string{"vendor", "testdata", ".git"},

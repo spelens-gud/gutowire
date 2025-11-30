@@ -37,3 +37,17 @@ func WithSearchPath(path string) Option {
 		o.SearchPath = path
 	}
 }
+
+// WithCache function    设置是否启用缓存.
+func WithCache(enable bool) Option {
+	return func(o *Opt) {
+		o.EnableCache = enable
+	}
+}
+
+// WithExcludeDirs function    设置排除的目录列表.
+func WithExcludeDirs(dirs []string) Option {
+	return func(o *Opt) {
+		o.ExcludeDirs = dirs
+	}
+}

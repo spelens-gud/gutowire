@@ -54,7 +54,7 @@ var rootCmd = &cobra.Command{
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, args []string) error {
 		// 如果是初始化配置文件
 		if initConfig {
 			return handleInitConfig()
@@ -83,6 +83,18 @@ var rootCmd = &cobra.Command{
 		}
 		if searchPath != "" {
 			opts = append(opts, config.WithSearchPath(searchPath))
+		}
+
+		// 应用缓存配置（命令行 --no-cache 优先级最高）
+		enableCache := cfg.EnableCache
+		if noCache {
+			enableCache = false
+		}
+		opts = append(opts, config.WithCache(enableCache))
+
+		// 应用排除目录配置
+		if len(cfg.ExcludeDirs) > 0 {
+			opts = append(opts, config.WithExcludeDirs(cfg.ExcludeDirs))
 		}
 
 		// 从位置参数或标志或配置文件获取生成路径
@@ -121,9 +133,9 @@ var rootCmd = &cobra.Command{
 }
 
 var versionBit = lipgloss.NewStyle().Foreground(charmtone.Coral).SetString(`
-  ___  _  _  ____  __   _  _  __  ____  ____ 
+  ___  _  _  ____  __   _  _  __  ____  ____
  / __)/ )( \(_  _)/  \ / )( \(  )(  _ \(  __)
-( (_ \) \/ (  )( (  O )\ /\ / )(  )   / ) _) 
+( (_ \) \/ (  )( (  O )\ /\ / )(  )   / ) _)
  \___/\____/ (__) \__/ (_/\_)(__)(__\_)(____)
 `)
 
@@ -184,6 +196,7 @@ func handleWatch(wirePath, searchPath string, opts []config.Option) error {
 	if err != nil {
 		return fmt.Errorf("创建监听器失败: %w", err)
 	}
+	//nolint:errcheck
 	defer w.Close()
 
 	// 开始监听

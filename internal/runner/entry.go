@@ -72,7 +72,7 @@ func runAutoWireGen(genPath string, opts ...config.Option) error {
 	}
 
 	// 创建搜索器实例
-	sc := generator.NewAutoWireSearcher(genPath, modBase, o.InitWire, pkg)
+	sc := generator.NewAutoWireSearcher(genPath, modBase, o.InitWire, pkg, o.EnableCache, o.ExcludeDirs)
 
 	// 扫描所有文件，收集注解信息
 	if err := sc.SearchAllPath(file); err != nil {
@@ -134,55 +134,4 @@ func runWire(path string) error {
 	}
 	log.Printf("[生成成功] %s", output)
 	return nil
-}
-
-// formatWireError function    格式化 wire 错误信息.
-func formatWireError(output string) string {
-	if output == "" {
-		return "未知错误"
-	}
-
-	var friendlyMsg strings.Builder
-	friendlyMsg.WriteString("Wire 依赖注入生成失败，请检查以下问题：\n\n")
-
-	lines := strings.Split(output, "\n")
-	errorCount := 0
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		// 解析 wire 错误信息
-		if strings.Contains(line, "provider struct has multiple fields of type invalid type") {
-			errorCount++
-			// 提取文件路径
-			if idx := strings.Index(line, ":"); idx > 0 {
-				filePath := line[strings.Index(line, " ")+1 : idx]
-				friendlyMsg.WriteString(fmt.Sprintf("x 错误 %d: 结构体字段类型错误\n", errorCount))
-				friendlyMsg.WriteString(fmt.Sprintf("   文件: %s\n", filePath))
-				friendlyMsg.WriteString("   原因: 结构体中存在多个相同类型的匿名字段，或字段类型无法解析\n")
-				friendlyMsg.WriteString("   建议:\n")
-				friendlyMsg.WriteString("   - 检查是否有重复的匿名字段（embedded fields）\n")
-				friendlyMsg.WriteString("   - 确保所有字段类型都已正确导入\n")
-				friendlyMsg.WriteString("   - 避免循环依赖\n\n")
-			}
-		} else if strings.Contains(line, "generate failed") {
-			errorCount++
-			friendlyMsg.WriteString(fmt.Sprintf("x 错误 %d: %s\n\n", errorCount, line))
-		} else if strings.HasPrefix(line, "wire:") {
-			// 保留原始 wire 错误信息作为详细信息
-			if !strings.Contains(line, "provider struct has multiple fields") {
-				friendlyMsg.WriteString(fmt.Sprintf("   详细: %s\n", strings.TrimPrefix(line, "wire:")))
-			}
-		}
-	}
-
-	if errorCount == 0 {
-		friendlyMsg.WriteString("原始错误信息:\n")
-		friendlyMsg.WriteString(output)
-	}
-
-	return friendlyMsg.String()
 }

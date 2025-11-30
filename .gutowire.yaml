@@ -1,9 +1,8 @@
 search_path: ./
-output_path: ./wire
+output_path: ./examples/inject
 package: wire
 init_types:
-    - App
-    - Server
+    - "*"
 enable_cache: true
 parallel: 0
 exclude_dirs:
