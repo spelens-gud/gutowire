@@ -41,14 +41,16 @@ var (
 
 // rootCmd represents the base command when called without any subcommands.
 var rootCmd = &cobra.Command{
-	Use:   commandName,
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
+	Use:   commandName + " [flags] <生成路径>",
+	Short: "基于 Google Wire 的依赖注入代码生成工具",
+	Long: `GuToWire 是一个基于 Google Wire 的依赖注入代码生成工具。
+通过 @autowire 注解自动生成 Wire 配置文件。
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+示例:
+  gutowire ./wire                    # 生成到 ./wire 目录
+  gutowire --watch ./wire            # Watch 模式
+  gutowire --init                    # 生成配置文件
+  gutowire --config=.gutowire.yaml   # 使用配置文件`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	// Run: func(cmd *cobra.Command, args []string) { },

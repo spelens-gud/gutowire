@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/spelens-gud/gutowire/internal/config"
+	"github.com/spelens-gud/gutowire/internal/errors"
 	"github.com/spelens-gud/gutowire/internal/generator"
 	"github.com/spelens-gud/gutowire/internal/parser"
 )
@@ -40,6 +41,10 @@ func RunAutoWire(genPath string, opts ...config.Option) error {
 
 	// 第二步：调用 wire 命令生成最终代码
 	if err := runWire(genPath); err != nil {
+		// 使用友好的错误提示
+		if wireErr, ok := err.(*errors.FriendlyError); ok {
+			return wireErr
+		}
 		return fmt.Errorf("运行 wire 命令失败: %w", err)
 	}
 	return nil
@@ -96,7 +101,16 @@ func runWire(path string) error {
 	// 查找 wire 命令的路径
 	wirePath, err := exec.LookPath("wire")
 	if err != nil {
-		return fmt.Errorf("未找到 wire 命令: %w\n请通过以下命令安装: go install github.com/google/wire/cmd/wire@latest", err)
+		return &errors.FriendlyError{
+			Type:    errors.ErrorTypeFileNotFound,
+			Message: "未找到 wire 命令",
+			Suggestions: []string{
+				"运行以下命令安装 wire: go install github.com/google/wire/cmd/wire@latest",
+				"确保 $GOPATH/bin 或 $GOBIN 在 PATH 环境变量中",
+				"检查 Go 环境是否正确配置",
+			},
+			HelpURL: "https://github.com/google/wire#installation",
+		}
 	}
 
 	// 检查是否为可信的 bin 目录
@@ -115,7 +129,8 @@ func runWire(path string) error {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		log.Printf("[生成失败] %s", output)
-		return fmt.Errorf("wire 命令执行失败: %w\n\n%s", err, formatWireError(string(output)))
+		// 返回友好的错误提示
+		return errors.NewWireError(string(output))
 	}
 	log.Printf("[生成成功] %s", output)
 	return nil
